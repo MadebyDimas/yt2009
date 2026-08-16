@@ -2553,10 +2553,15 @@ module.exports = {
         // wait for dominant color complete
         let dominantColor = []
         function waitDominantColor(callback) {
+            let ticks = 0;
             let z = setInterval(() => {
+                ticks++;
                 let utd = n_impl_yt2009channelcache.read("main")[data.id]
-                if(utd.dominant_color) {
+                if(utd && utd.dominant_color) {
                     dominantColor = utd.dominant_color;
+                    clearInterval(z)
+                    callback()
+                } else if(ticks >= 50) {
                     clearInterval(z)
                     callback()
                 }
@@ -2582,10 +2587,12 @@ module.exports = {
             ac()
         }
         if(!flags.includes("disable_old_banners")) {
+            let ticks = 0;
             let y = setInterval(() => {
+                ticks++;
                 let utd = n_impl_yt2009channelcache.read("main")[data.id]
 
-                if(!utd) {
+                if(!utd || ticks >= 50) {
                     setDefaults()
                     clearInterval(y)
                     return;
@@ -3276,6 +3283,7 @@ module.exports = {
                 }
             }).catch(e => {
                 console.log(e)
+                mc()
             })
         } else {
             if(fs.statSync(b).size > 5

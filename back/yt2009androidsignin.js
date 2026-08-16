@@ -492,7 +492,8 @@ function signIn(email, token) {
 function createFetchAgentMirror(pickedAddress) {
     if(pickedAddress) {
         return new https.Agent({
-            "localAddress": pickedAddress
+            "localAddress": pickedAddress,
+            "ALPNProtocols": ['http/1.1']
         })
     }
     if(config.ipv6) {
@@ -510,8 +511,11 @@ function createFetchAgentMirror(pickedAddress) {
         }
 
         return new https.Agent({
-            "localAddress": unshortened.join(":")
+            "localAddress": unshortened.join(":"),
+            "ALPNProtocols": ['http/1.1']
         })
     }
-    return null;
+    return new https.Agent({
+        "ALPNProtocols": ['http/1.1']
+    });
 }

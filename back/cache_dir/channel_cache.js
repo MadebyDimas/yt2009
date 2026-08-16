@@ -22,7 +22,7 @@ module.exports = {
     },
 
     "read": function(cacheType) {
-        return JSON.parse(JSON.stringify(cacheList[cacheType + "Cache"]))
+        return cacheList[cacheType + "Cache"] || {}
     },
 
     "clean": function() {

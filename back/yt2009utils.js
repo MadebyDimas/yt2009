@@ -1740,7 +1740,7 @@ module.exports = {
                 }),
                 "method": "POST",
                 "mode": "cors",
-                "agent": createFetchAgent()
+                "agent": this.createFetchAgent()
             }).then(r => {r.json().then(r => {
                 processPlayerResponse(r)
             })})
@@ -1786,7 +1786,8 @@ module.exports = {
             adjustPartsize()
             const newHeaders = JSON.parse(JSON.stringify(androidHeaders));
             newHeaders.headers.range = `bytes=${startB}-${startB + partSize}`;
-            newHeaders.timeout = 40000
+            newHeaders.timeout = 40000;
+            newHeaders.agent = global.defaultHttpsAgent;
             fetch(url, newHeaders).catch(e => {
                 lastPartFailCount++
                 let failFriendly = `(${lastPartFailCount}/${downloadRetryMax})`
@@ -3005,30 +3006,28 @@ module.exports = {
     },
 
     "createFetchAgent": function(pickedAddress) {
+        if(!global.defaultHttpsAgent) {
+            global.defaultHttpsAgent = new https.Agent({
+                "keepAlive": true,
+                "keepAliveMsecs": 10000,
+                "maxSockets": 50,
+                "ALPNProtocols": ['http/1.1']
+            });
+            global.agentCacheMap = {};
+        }
         if(pickedAddress) {
-            return new https.Agent({
-                "localAddress": pickedAddress
-            })
-        }
-        if(config.ipv6) {
-            const ipChars = "0123456789abcdef".split("")
-            let unshortened = config.ipv6.split(":").map(s => {
-                return (s&&s.toString()&&s.toString().padStart(4, "0"))
-            }).filter(s => {return s})
-            unshortened = unshortened.slice(0,8)
-            while(unshortened.length !== 8) {
-                let part = ""
-                while(part.length !== 4) {
-                    part += ipChars[Math.floor(Math.random() * ipChars.length)]
-                }
-                unshortened.push(part)
+            if(!global.agentCacheMap[pickedAddress]) {
+                global.agentCacheMap[pickedAddress] = new https.Agent({
+                    "localAddress": pickedAddress,
+                    "keepAlive": true,
+                    "keepAliveMsecs": 10000,
+                    "maxSockets": 50,
+                    "ALPNProtocols": ['http/1.1']
+                });
             }
-
-            return new https.Agent({
-                "localAddress": unshortened.join(":")
-            })
+            return global.agentCacheMap[pickedAddress];
         }
-        return null;
+        return global.defaultHttpsAgent;
     },
 
     "fmodeComunitab": {

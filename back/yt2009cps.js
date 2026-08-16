@@ -54,6 +54,9 @@ module.exports = {
         if(!req.query.q && req.query.vq) {
             req.query.q = req.query.vq;
         }
+        if(!req.query.q) {
+            req.query.q = "minecraft";
+        }
 
         let flags = ""
         if(req.headers.cookie.includes("search_flags")) {

@@ -40,8 +40,14 @@ module.exports = {
 
             if(processingStoryboards.includes(id)) {
                 // already processing, wait until complete and send
+                let ticks = 0;
                 let x = setInterval(() => {
+                    ticks++;
                     if(!processingStoryboards.includes(id)) {
+                        clearInterval(x)
+                        res.redirect("/assets/" + finalFile)
+                        return;
+                    } else if(ticks >= 100) {
                         clearInterval(x)
                         res.redirect("/assets/" + finalFile)
                         return;

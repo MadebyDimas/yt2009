@@ -106,8 +106,23 @@ module.exports = {
     // handling /get_video (flv)
     "get_flv": function(req, res) {
         let avoidRedirect = false;
-        if(req.headers["user-agent"]
-        && req.headers["user-agent"].includes("Nintendo 3DS")) {
+        let ua = (req.headers && req.headers["user-agent"]) ? req.headers["user-agent"] : "";
+        if(ua.includes("Nintendo 3DS")
+        || ua.includes("iPhone")
+        || ua.includes("iPod")
+        || ua.includes("iPad")
+        || ua.includes("Android")
+        || ua.includes("Dalvik")
+        || ua.includes("Stagefright")
+        || ua.includes("Symbian")
+        || ua.includes("Nokia")
+        || ua.includes("AppleTV")
+        || ua.includes("CorePlayer")
+        || ua.includes("QuickTime")
+        || ua.includes("PLAYSTATION")
+        || ua.includes("PSVita")
+        || ua.includes("PSP")
+        || (req.query && (req.query.direct == "1" || req.query.noredir == "1"))) {
             avoidRedirect = true;
         }
         if(!req.query.video_id) {
@@ -261,8 +276,13 @@ module.exports = {
         // have flv?
         if(flvProcessingVideos.includes(id)) {
             // wait for flv to finish processing (another request sent before)
+            let ticks = 0;
             let x = setInterval(() => {
+                ticks++;
                 if(!flvProcessingVideos.includes(id)) {
+                    callback();
+                    clearInterval(x)
+                } else if(ticks >= 40) {
                     callback();
                     clearInterval(x)
                 }

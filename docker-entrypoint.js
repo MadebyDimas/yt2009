@@ -17,15 +17,12 @@ try {
 }
 
 // set auto maintain
-switch (process.env.YT2009_AUTO_MAINTAIN) {
-    case 'true':
-        cfg.auto_maintain = true;
-        break;
-    case 'false':
-        cfg.auto_maintain = false;
-        break;
-    default:
-        throw new Error('invalid YT2009_AUTO_MAINTAIN')
+if (!process.env.YT2009_AUTO_MAINTAIN || process.env.YT2009_AUTO_MAINTAIN === 'true') {
+    cfg.auto_maintain = true;
+} else if (process.env.YT2009_AUTO_MAINTAIN === 'false') {
+    cfg.auto_maintain = false;
+} else {
+    throw new Error('invalid YT2009_AUTO_MAINTAIN')
 }
 
 // set maintain max size

@@ -126,9 +126,27 @@
 		<span class="embed-play-btn" style="display: block;" onclick="video.play();"></span>
 		<style class="player_auto_css"></style>
 	</div>
+	<script>
+		if(document.getElementsByTagName
+		&& document.getElementsByTagName("video")
+		&& document.getElementsByTagName("video")[0]) {
+			var v = document.getElementsByTagName("video")[0];
+			if(typeof(v.volume) !== "number") {
+				var container = document.querySelector(".embed-container") || document.body;
+				container.innerHTML = "";
+				var noplayer = document.createElement("div");
+				noplayer.id = "watch-noplayer-div";
+				noplayer.style.cssText = "color: white; padding: 20px; text-align: center; font-size: 14px;";
+				noplayer.innerHTML = 'your browser does not appear to support HTML5. <a href="/toggle_f" target="_top" style="color: #66b3ff;">enable Flash Player</a>';
+				container.appendChild(noplayer);
+			}
+		}
+	</script>
 	<script src="/assets/site-assets/html5-player.js"></script>
 	<script>
-		initPlayer(document, true)
+		if(document.querySelector(".embed-container video")) {
+			initPlayer(document, true)
+		}
 		//yt2009-no-controls-fade
 		//yt2009-trustedcontext
 		//yt2009-annotation-redirect

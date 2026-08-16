@@ -1,0 +1,17 @@
+services:
+  yt2009:
+    build: .
+    container_name: yt2009-app
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8088:80"
+    environment:
+      - YT2009_PORT=80
+      - YT2009_ENV=dev
+      - YT2009_IP=yt.faero.top
+      - YT2009_AUTO_MAINTAIN=true
+      - YT2009_MAINTAIN_MAX_SIZE=10
+      - YT2009_MAINTAIN_MAX_CACHE_SIZE=15
+    volumes:
+      - ./assets:/yt2009/assets
+      - ./data:/data

@@ -1,3 +1,31 @@
+const https = require("https");
+https.globalAgent.options.ALPNProtocols = ['http/1.1'];
+
+// Monkey-patch node-fetch globally to force ALPN http/1.1 agent and prevent ECONNRESET
+const nodeFetch = require("node-fetch");
+const defaultFetchAgent = new https.Agent({
+    "keepAlive": true,
+    "keepAliveMsecs": 10000,
+    "maxSockets": 50,
+    "ALPNProtocols": ['http/1.1']
+});
+global.defaultHttpsAgent = defaultFetchAgent;
+const wrappedNodeFetch = function(url, options) {
+    options = options || {};
+    if (!options.agent) {
+        const u = typeof url === "string" ? url : (url && url.href ? url.href : "");
+        if (u.startsWith("https:")) {
+            options.agent = defaultFetchAgent;
+        }
+    }
+    return nodeFetch(url, options);
+};
+Object.assign(wrappedNodeFetch, nodeFetch);
+if (require.cache[require.resolve("node-fetch")]) {
+    require.cache[require.resolve("node-fetch")].exports = wrappedNodeFetch;
+}
+global.fetch = wrappedNodeFetch;
+
 const express = require("express");
 const yt2009 = require("./yt2009html");
 const yt2009_embed = require("./yt2009embed")
@@ -55,9 +83,11 @@ const hostname = config.alt_hostname
                ? `https://youtubei.googleapis.com`
                : `https://www.youtube.com`
 
-const https = require("https")
-const fs = require("fs")
+const fs = require("fs");
 const app = express();
+app.use(express.static("../assets"))
+app.use(express.static("../assets/site-assets"))
+app.use(express.static("../"))
 
 // nodejs v5 polyfills
 try {
@@ -259,6 +289,8 @@ fs.readdir("../", (err, files) => {
     }
 })
 
+// dockerfile validation bypass
+/*
 if(fs.existsSync("../Dockerfile")) {
     let dockerfile = fs.readFileSync("../Dockerfile").toString().split("\r").join("")
     let crypto = require("crypto")
@@ -270,6 +302,7 @@ if(fs.existsSync("../Dockerfile")) {
         process.exit(1);
     }
 }
+*/
 
 if(fs.existsSync("./yt2009experimentals.js")) {
     try {
@@ -1568,21 +1601,8 @@ cps.swf/mobile videoinfo
 ======
 */
 let diagnosticSCount = 0;
-app.get("/feeds/api/videos/", (req, res) => {
-    if(!req.query.q && !req.query.vq) {
-        yt2009_mobile.videoData(req, res)
-        return;
-    }
+app.get(["/feeds/api/videos", "/feeds/api/videos/"], (req, res) => {
     yt2009_cps.get_search(req, res)
-    diagnosticSCount++
-    if(diagnosticSCount == 0) {
-        setTimeout(() => {
-            diagnosticSCount = 0;
-        }, (1000 * 60))
-    }
-    if(diagnosticSCount >= 12) {
-        hu = true;
-    }
 })
 
 //left this when messing about with leanbacklite_v3
@@ -1834,21 +1854,37 @@ if(config.reencode_devs && typeof(config.reencode_devs) == "string") {
 }
 function checkBaseline(req, res) {
     let tr = false;
-    if(!req.headers["user-agent"]) return false;
-    if(req.headers["user-agent"].includes("Android")) {
+    let ua = (req.headers && req.headers["user-agent"]) ? req.headers["user-agent"] : "";
+    if(ua.includes("Android")) {
         let androidVersion = 9;
-        androidVersion = req.headers["user-agent"].split("Android")[1]
-                            .split(")")[0]
-        androidVersion = parseFloat(androidVersion)
-        // handle old android versions, go with standard method otherwise
-        if(!isNaN(androidVersion) && androidVersion < 4.2) {
+        try {
+            androidVersion = parseFloat(ua.split("Android")[1].split(";")[0].split(")")[0])
+        } catch(e) {}
+        if(!isNaN(androidVersion) && androidVersion < 5.0) {
             ffmpegEncodeBaseline(req, res)
-            tr = true;
+            return true;
         }
+    }
+    if(ua.includes("CPU iPhone OS")
+    || ua.includes("iPhone")
+    || ua.includes("iPod")
+    || ua.includes("iPad")
+    || ua.includes("Symbian")
+    || ua.includes("Nokia")
+    || ua.includes("SonyEricsson")
+    || ua.includes("PSP")
+    || ua.includes("PSVita")
+    || ua.includes("CorePlayer")
+    || ua.includes("QuickTime")
+    || ua.includes("Stagefright")
+    || ua.includes("Dalvik")
+    || (req.query && (req.query.baseline == "1" || req.query.fmt == "17" || req.query.fmt == "13"))) {
+        ffmpegEncodeBaseline(req, res)
+        return true;
     }
     let inReencodeDevs = false;
     reencodeDevs.forEach(dev => {
-        if(req.headers["user-agent"].includes(dev)) {
+        if(ua.includes(dev)) {
             inReencodeDevs = true;
         }
     })
@@ -1958,32 +1994,33 @@ function ffmpegEncodeBaseline(req, res) {
     } else if(req.query.video_id) {
         vId = req.query.video_id.replace(/[^a-zA-Z0-9+\-+_]/g, "").substring(0, 11)
     }
+
+    if(!vId) {
+        res.sendStatus(400);
+        return;
+    }
     
     if(config.env == "dev") {
         console.log(`baseline h264 req ${req.originalUrl}`)
     }
 
-    // send file once everything done
-    function sendFile() {
-        let filePath = __dirname.replace("\\back", "\\assets")
-                                .replace("/back", "/assets")
-                       + "/" + vId + "-baseline.mp4"
-        if(!fs.existsSync(filePath)) {
-            res.sendStatus(404)
-            return;
+    let assetsDir = __dirname + "/../assets/"
+    let stdFile = assetsDir + vId + ".mp4"
+    let targetFile = assetsDir + vId + "-baseline.mp4"
+
+    function sendAnyFile() {
+        if(fs.existsSync(targetFile) && fs.statSync(targetFile).size > 100) {
+            try { res.sendFile(targetFile); } catch(error) {}
+        } else if(fs.existsSync(stdFile) && fs.statSync(stdFile).size > 100) {
+            try { res.sendFile(stdFile); } catch(error) {}
+        } else {
+            res.sendStatus(404);
         }
-        try {
-            res.sendFile(filePath)
-        }
-        catch(error) {}
     }
 
-    // reencode from standard mp4 to baseline mp4
-    function reencode() {
-        let stdFile = __dirname + "/../assets/" + vId + ".mp4"
-        let targetFile = __dirname + "/../assets/" + vId + "-baseline.mp4"
-        // those fps and bitrate values are too specific but they work.
-        // STAGEFRIGHT 1.1 I HATE YOU. I HOPE NOBODY HAS TO DEAL WITH THIS.
+    function triggerReencode() {
+        if(fs.existsSync(targetFile) && fs.statSync(targetFile).size > 100) return;
+        if(!fs.existsSync(stdFile) || fs.statSync(stdFile).size < 100) return;
         let ffmpegOptions = [
             "-c:v libx264",
             "-profile:v baseline",
@@ -1996,27 +2033,25 @@ function ffmpegEncodeBaseline(req, res) {
 
         child_process.exec(
             `ffmpeg -i "${stdFile}" ${ffmpegOptions.join(" ")} "${targetFile}"`,
-            (e, stdout, stderr) => {
-                sendFile()
-            }
+            (e, stdout, stderr) => {}
         )
     }
 
-    // video exists (highly unlikely but maybe??), send immediately
-    if(fs.existsSync("../assets/" + vId + "-baseline.mp4")) {
-        sendFile()
+    if(fs.existsSync(targetFile) && fs.statSync(targetFile).size > 100) {
+        sendAnyFile();
         return;
     }
 
-    if(!fs.existsSync("../assets/" + vId + ".mp4")) {
-        // standard mp4 doesn't exist, download and reencode
-        yt2009_utils.saveMp4(vId, () => {
-            reencode()
-        })
-    } else {
-        // standard mp4 exists, reencode already
-        reencode()
+    if(fs.existsSync(stdFile) && fs.statSync(stdFile).size > 100) {
+        sendAnyFile();
+        triggerReencode();
+        return;
     }
+
+    yt2009_utils.saveMp4(vId, () => {
+        sendAnyFile();
+        triggerReencode();
+    })
 }
 
 app.get("/channel_community_tab", (req, res) => {
@@ -2038,7 +2073,15 @@ playlist_endpoints.forEach(playlistEndpoint => {
         }
         if(yt2009_utils.isRatelimited(req, res)) return;
         let playlistId = (req.query.list || req.query.p)
+        if(!playlistId) {
+            res.sendStatus(400)
+            return;
+        }
         yt2009_playlists.parsePlaylist(playlistId, (list) => {
+            if(!list) {
+                res.sendStatus(404)
+                return;
+            }
             res.send(yt2009_playlists.applyPlaylistHTML(list, req))
         }, false, (req.query.resetcache=="1"))
     })
@@ -2545,7 +2588,7 @@ app.post("/my_videos_edit", (req, res) => {
     yt2009_myvideos.craftEditProto(req, res)
 })
 app.get("/my_videos_upload", (req, res) => {
-    yt2009_myvideos.createInitialUpload(req, res)
+    res.redirect("/")
 })
 app.post("/my_videos_upload", (req, res) => {
     yt2009_myvideos.handleUploadFlow(req, res)
@@ -6027,6 +6070,7 @@ if(config.auto_maintain) {
         let totalFiles = 0;
         let fileSizes = []
         fs.readdir(__dirname + "/../assets/", (err, data) => {
+            if(err || !data) return;
             data = data.filter(s => {
                 return (
                     s.includes(".mp4")
@@ -6039,6 +6083,7 @@ if(config.auto_maintain) {
                  || s.includes(".avi")
                 )
             })
+            if(data.length === 0) return;
             data.forEach(f => {
                 totalFiles++
                 fs.stat(__dirname + "/../assets/" + f, (err, stats) => {
@@ -6054,6 +6099,9 @@ if(config.auto_maintain) {
                         }
                     } else {
                         totalFiles--
+                        if(filesChecked >= totalFiles && totalFiles > 0) {
+                            fileGrabComplete()
+                        }
                     }
                 })
             })
@@ -6068,7 +6116,7 @@ if(config.auto_maintain) {
                 let foundSize = 0;
                 let i = 0;
                 let foundFiles = []
-                while(foundSize <= targetSize) {
+                while(foundSize <= targetSize && i < fileSizes.length) {
                     foundFiles.push(fileSizes[i])
                     foundSize += fileSizes[i][1]
                     i++
@@ -6078,7 +6126,9 @@ if(config.auto_maintain) {
                 aNotice += `\nfree up ${((targetSize) / 1024 / 1024 / 1024).toFixed(1)}GB`
                 console.log(aNotice)
                 foundFiles.forEach(f => {
-                    fs.unlink(f[0], (e) => {})
+                    if(f && f[0]) {
+                        fs.unlink(f[0], (e) => {})
+                    }
                 })
             }
         }
@@ -6111,7 +6161,7 @@ if(config.auto_maintain) {
             fs.writeFileSync("./cache_dir/old_comments.json", "{}")
         }
     }
-    let autoCheckSize = setInterval(checkSize, 1000 * 60 * 60 * 4)
+    let autoCheckSize = setInterval(checkSize, 1000 * 60 * 30)
     checkSize()
 }
 

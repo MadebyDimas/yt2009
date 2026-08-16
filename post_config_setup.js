@@ -1,4 +1,18 @@
-const fetch = require("node-fetch")
+const https = require("https");
+https.globalAgent.options.ALPNProtocols = ['http/1.1'];
+const defaultHttpsAgent = new https.Agent({ keepAlive: true, keepAliveMsecs: 10000, maxSockets: 50, ALPNProtocols: ['http/1.1'] });
+const nodeFetch = require("node-fetch");
+const fetch = function(url, options) {
+    options = options || {};
+    if (!options.agent) {
+        const u = typeof url === "string" ? url : (url && url.href ? url.href : "");
+        if (u.startsWith("https:")) {
+            options.agent = defaultHttpsAgent;
+        }
+    }
+    return nodeFetch(url, options);
+};
+Object.assign(fetch, nodeFetch);
 const child_process = require("child_process")
 const config = require("./back/config.json")
 const constants = require("./back/yt2009constants.json")
@@ -85,6 +99,9 @@ if(!fs.existsSync("./back/cache_dir/annotations/")) {
 if(!fs.existsSync("./back/cache_dir/subtitles/")) {
     fs.mkdirSync("./back/cache_dir/subtitles/")
 }
+if(!fs.existsSync("./assets/site-assets/")) {
+    fs.mkdirSync("./assets/site-assets/", { recursive: true })
+}
 
 /*
 =======
@@ -119,17 +136,19 @@ fetch("https://www.youtube.com/", {
     "mode": "cors"
 }).then(r => {
     // set cookies
-    let cookie = r.headers.get("set-cookie").split(",")
-    let cookieString = ""
-    cookie.forEach(part => {
-        if(part.split(";")[0].includes("=")) {
-            cookieString += part.trimStart().split(";")[0] + "; "
-        }
-    })
-    constants.headers.cookie = cookieString
+    if(r && r.headers && r.headers.get("set-cookie")) {
+        let cookie = r.headers.get("set-cookie").split(",")
+        let cookieString = ""
+        cookie.forEach(part => {
+            if(part.split(";")[0].includes("=")) {
+                cookieString += part.trimStart().split(";")[0] + "; "
+            }
+        })
+        constants.headers.cookie = cookieString
+    }
 
     // set innertube context
-    r.text().then(res => {
+    return r.text().then(res => {
         let context = res.split(`"INNERTUBE_CONTEXT":`)[1]
                          .split(`,"user":{"lockedSafetyMode":`)[0] + "}"
         constants.cached_innertube_context = JSON.parse(context)
@@ -145,6 +164,12 @@ fetch("https://www.youtube.com/", {
             downloadFile()
         }, 402)
     })
+}).catch(err => {
+    console.log("warning: innertube setup fetch skipped:", err.message)
+    setTimeout(function() {
+        console.log("=== downloading assets ===")
+        downloadFile()
+    }, 402)
 })
 
 /*
@@ -395,21 +420,41 @@ function downloadFile() {
     relativeFileName = relativeFileName[relativeFileName.length - 1]
     // save file
     setTimeout(function() {
-        if(!fs.existsSync(file.path)) {
+        let fileExists = fs.existsSync(file.path) && fs.statSync(file.path).size > 50;
+        if(!fileExists) {
             console.log(`downloading ${relativeFileName} (${fileNumber}/${initialFileCount})`)
             fetch(file.url, {
                 "headers": constants.headers
-            }).then(r => {r.buffer().then(buffer => {
-                fs.writeFileSync(file.path, buffer)
-                // download the next file
+            }).then(r => {
+                if(r.status === 200) {
+                    r.buffer().then(buffer => {
+                        if(buffer && buffer.length > 50) {
+                            fs.writeFileSync(file.path, buffer)
+                        }
+                        files.shift()
+                        if(files.length > 0) {
+                            downloadFile()
+                        } else {
+                            console.log("file download done!!")
+                        }
+                    }).catch(err => {
+                        files.shift()
+                        if(files.length > 0) downloadFile();
+                    })
+                } else {
+                    console.log(`skipping ${relativeFileName}, HTTP status ${r.status}`)
+                    files.shift()
+                    if(files.length > 0) downloadFile();
+                }
+            }).catch(err => {
+                console.log(`skipping ${relativeFileName} due to error: ${err.message}`)
                 files.shift()
                 if(files.length > 0) {
                     downloadFile()
                 } else {
-                    // done
                     console.log("file download done!!")
                 }
-            })})
+            })
         } else {
             // skip download if the file already exists
             console.log(`skipping ${relativeFileName}, file exists`)

@@ -68,7 +68,9 @@ module.exports = {
             "mode": "cors"
         }).then(r => {r.json().then(r => {
             callback(r)
-        })})
+        })}).catch(e => {
+            callback(false)
+        })
     },
 
 
@@ -172,17 +174,23 @@ module.exports = {
             }
 
             this.innertube_get_data(playlistId, (r) => {
-                if(!r.contents) {
+                if(!r || !r.contents) {
                     callback(false)
                     return;
                 }
-                let playlistArray = r.contents.twoColumnBrowseResultsRenderer
-                                     .tabs[0].tabRenderer.content
-                                     .sectionListRenderer.contents[0]
-                                     .itemSectionRenderer.contents
-                if(playlistArray[0]
-                && playlistArray[0].playlistVideoListRenderer) {
-                    playlistArray = playlistArray[0].playlistVideoListRenderer.contents
+                let playlistArray = [];
+                try {
+                    playlistArray = r.contents.twoColumnBrowseResultsRenderer
+                                         .tabs[0].tabRenderer.content
+                                         .sectionListRenderer.contents[0]
+                                         .itemSectionRenderer.contents
+                    if(playlistArray[0]
+                    && playlistArray[0].playlistVideoListRenderer) {
+                        playlistArray = playlistArray[0].playlistVideoListRenderer.contents
+                    }
+                } catch(e) {
+                    callback(false)
+                    return;
                 }
                 // metadata
                 let primarySidebar = r.sidebar.playlistSidebarRenderer.items[0]

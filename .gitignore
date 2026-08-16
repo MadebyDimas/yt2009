@@ -34,11 +34,14 @@ back/yt2009experimentals.js
 back/cache_dir/subtitles
 back/cache_dir/subtitles/*
 assets/dsabr-*
+assets/assets-*
 
 # yt assets
 master-vfl121679.png
 video_bar_arrows-vfl84478.png
 favicon.ico
+icn_loading_animated-vfl24663.gif
+pixel-vfl73.gif
 assets/site-assets/active_sharing_on-vfl70992.png
 assets/site-assets/activity_indicator-vfl120761.gif
 assets/site-assets/annotations_editor_switch-vfl78622.gif
@@ -108,3 +111,4 @@ back/ikPlayground.js
 .start.bat
 .setup_error
 yt2009starter.exe
+data/

@@ -999,10 +999,15 @@ module.exports = {
         }
         if(downloadProgresses.includes(fIndicator)) {
             // sabr download of this video already running, wait for complete
+            let ticks = 0;
             let x = setInterval(() => {
+                ticks++;
                 if(!downloadProgresses.includes(fIndicator)) {
                     clearInterval(x)
                     callback(`/assets/${fIndicator}.mp4`)
+                } else if(ticks >= 120) {
+                    clearInterval(x)
+                    callback(false)
                 }
             }, 500)
             return;
@@ -1204,60 +1209,34 @@ module.exports = {
                     function markCallbackDone(c) {
                         completeStatuses.push(c)
                         callbacksDone++
-                        if(callbacksDone >= callbacksRequired
-                        && !completeStatuses.filter(z => {
-                            return !z
-                        })[0]) {
-                            // all completed well?
-                            let ffmpegCmd = [
-                                "ffmpeg",
-                                "-y",
-                                `-i "${__dirname}/..${targetFname}-a.m4a"`,
-                                `-i "${__dirname}/..${targetFname}-v.mp4"`,
-                                "-map 0:a",
-                                "-map 1:v",
-                                "-c:v copy",
-                                "-c:a copy",
-                                "-movflags +faststart",
-                                `"${__dirname}/..${targetFname}"`
-                            ].join(" ")
-                            child_process.exec(ffmpegCmd, (e, so, se) => {
-                                if(fs.existsSync(`..${targetFname}`)) {
-                                    callback(targetFname)
-                                    freeupProgress()
-                                } else {
-                                    callback(false)
-                                    freeupProgress()
-                                }
-                                setTimeout(() => {
-                                    writtenAudioFiles.forEach(f => {
-                                        try {
-                                            fs.unlink(f, (e) => {})
-                                        }
-                                        catch(error){}
-                                    })
-                                    writtenVideoFiles.forEach(f => {
-                                        try {
-                                            fs.unlink(f, (e) => {})
-                                        }
-                                        catch(error){}
-                                    })
-                                    try {
-                                        fs.unlink(
-                                            `..${targetFname}-a.m4a`, (e) => {}
-                                        )
-                                        fs.unlink(
-                                            `..${targetFname}-v.mp4`, (e) => {}
-                                        )
-                                        fs.unlink(audioAssetsFname, (e) => {})
-                                        fs.unlink(videoAssetsFname, (e) => {})
+                        if(callbacksDone >= callbacksRequired) {
+                            if(!completeStatuses.filter(z => !z)[0]) {
+                                // all completed well?
+                                let ffmpegCmd = [
+                                    "ffmpeg",
+                                    "-y",
+                                    `-i "${__dirname}/..${targetFname}-a.m4a"`,
+                                    `-i "${__dirname}/..${targetFname}-v.mp4"`,
+                                    "-map 0:a",
+                                    "-map 1:v",
+                                    "-c:v copy",
+                                    "-c:a copy",
+                                    "-movflags +faststart",
+                                    `"${__dirname}/..${targetFname}"`
+                                ].join(" ")
+                                child_process.exec(ffmpegCmd, (e, so, se) => {
+                                    if(fs.existsSync(`..${targetFname}`)) {
+                                        callback(targetFname)
+                                        freeupProgress()
+                                    } else {
+                                        callback(false)
+                                        freeupProgress()
                                     }
-                                    catch(error){}
-                                }, 1000)
-                            })
-                        } else if(callbacksDone >= callbacksRequired) {
-                            callback(false);
-                            freeupProgress()
+                                })
+                            } else {
+                                callback(false)
+                                freeupProgress()
+                            }
                         }
                     }
 
