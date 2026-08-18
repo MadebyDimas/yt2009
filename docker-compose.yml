@@ -16,7 +16,8 @@ services:
     restart: unless-stopped
     network_mode: "service:warp"
     depends_on:
-      - warp
+      warp:
+        condition: service_healthy
     environment:
       - YT2009_PORT=80
       - YT2009_ENV=dev
