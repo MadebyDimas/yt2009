@@ -129,10 +129,7 @@ module.exports = {
             res.sendStatus(400)
             return;
         }
-        if((req.headers.cookie
-        && req.headers.cookie.includes("exp_sabr"))
-        || (req.headers.referer || "").includes("sabr=1")
-        || (req.query.sabr && req.query.sabr !== "0")) {
+        if(req.query && req.query.force_sabr == "1") {
             let v = req.query.video_id.substring(0,11)
             let begin = 0;
             if(req.query.begin && !isNaN(parseInt(req.query.begin))) {

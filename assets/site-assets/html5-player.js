@@ -2955,9 +2955,13 @@ function requestSabr(offset, source, force) {
         }
         if(r.status >= 400) {
             // invalid response
+            var sabrlessUrl = (location.href.indexOf("/watch") !== -1)
+                ? ("/watch" + location.href.split("/watch")[1] + (location.href.indexOf("?") !== -1 ? "&unsabr=1" : "?unsabr=1"))
+                : (location.href + (location.href.indexOf("?") !== -1 ? "&unsabr=1" : "?unsabr=1"));
             showUnrecoverableError(
-                "there was a problem with the network response."
-                +" try reloading the page."
+                "there was a problem with the network response.<br>"
+                + '<a href="' + sabrlessUrl + '" style="color:#03c;text-decoration:underline;">try loading without SABR</a>'
+                + ' or connect a Google account at <a href="/gredir" target="_blank" style="color:#03c;text-decoration:underline;">/gredir</a>'
             )
             return;
         }
@@ -4080,7 +4084,7 @@ those can be changed at any time:<br>\
         o3.style.left = o3l + "px"
     }
     
-    if(!playingAsLive && window.MediaSource
+    if(false && !playingAsLive && window.MediaSource
     && window.MediaSource.isTypeSupported("video/mp4; codecs=\"avc1.4D4028\"")
     && window.MediaSource.isTypeSupported("audio/mp4; codecs=\"mp4a.40.2\"")
     && document.cookie.indexOf("saber_playback_mode_picked=") == -1

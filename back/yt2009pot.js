@@ -106,11 +106,18 @@ module.exports = {
                     resp.time = Math.floor((valid - Date.now()) / 1000)
                     packagePot()
                 })
+                c.on("error", (err) => {
+                    packagePot()
+                })
                 return;
             }
             overridenKey = null;
             overridenKeyId = null;
             packagePot()
-        })})
+        }).catch(err => {
+            packagePot()
+        })}).catch(err => {
+            packagePot()
+        })
     }
 }

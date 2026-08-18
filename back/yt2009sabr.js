@@ -417,9 +417,6 @@ module.exports = {
                 let d = yt2009signin.getData().yAuth
                 rHeaders.Authorization = `Bearer ${d}`
             }
-            rHeaders["Content-Type"] = "application/x-protobuf"
-            rHeaders["x-goog-api-format-version"] = "2"
-            rHeaders["x-goog-visitor-id"] = yt2009exports.read().visitor
             yt2009utils.craftPlayerProto(p.id, (pbmsg) => {
                 fetch("https://youtubei.googleapis.com/youtubei/v1/player", {
                     "headers": rHeaders,
@@ -428,9 +425,49 @@ module.exports = {
                     "agent": yt2009utils.createFetchAgent()
                 }).then(r => {r.buffer().then(b => {
                     let player = yt2009utils.protoportPlayer(b)
-                    extractPlayerData(player)
-                    processPlayer(player)
-                })})
+                    if(player && player.streamingData && player.streamingData.serverAbrStreamingUrl) {
+                        extractPlayerData(player)
+                        processPlayer(player)
+                    } else {
+                        // Fallback to ANDROID_VR player for SABR streamingData
+                        fetch("https://www.youtube.com/youtubei/v1/player", {
+                            "headers": {
+                                "Content-Type": "application/json",
+                                "User-Agent": "com.google.android.apps.youtube.vr.oculus/1.61.48 (Linux; U; Android 12; Quest 3) gzip"
+                            },
+                            "method": "POST",
+                            "body": JSON.stringify({
+                                "context": {
+                                    "client": {
+                                        "clientName": "ANDROID_VR",
+                                        "clientVersion": "1.61.48",
+                                        "deviceMake": "Oculus",
+                                        "deviceModel": "Quest 3",
+                                        "osName": "Android",
+                                        "osVersion": "12",
+                                        "hl": "en",
+                                        "gl": "US"
+                                    }
+                                },
+                                "videoId": p.id
+                            })
+                        }).then(vrRes => vrRes.json().then(vrPlayer => {
+                            if(vrPlayer && vrPlayer.streamingData) {
+                                extractPlayerData(vrPlayer)
+                                processPlayer(vrPlayer)
+                            } else {
+                                extractPlayerData(player)
+                                processPlayer(player)
+                            }
+                        }).catch(() => {
+                            extractPlayerData(player)
+                            processPlayer(player)
+                        })).catch(() => {
+                            extractPlayerData(player)
+                            processPlayer(player)
+                        })
+                    }
+                }).catch(() => processPlayer({}))}).catch(() => processPlayer({}))
             })
         }
     },

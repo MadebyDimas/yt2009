@@ -1715,12 +1715,135 @@ module.exports = {
                         return s;
                     }
                 })
-                r.streamingData.adaptiveFormats = checkedFmts
+                if(r && r.streamingData && r.streamingData.adaptiveFormats) {
+                    let checkedFmts = r.streamingData.adaptiveFormats.map(s => {
+                        if(s.itag == 140 || s.itag == 139) {
+                            if(s.audioTrack) {
+                                s.audioTrack.vss_id = s.audioTrack.id;
+                                s.audioTrack.label = s.audioTrack.displayName;
+                            }
+                            if(s.xtags && s.audioTrack) {
+                                try {
+                                    let decode = playerResponsePb.xtags
+                                                 .deserializeBinary(s.xtags)
+                                                 .toObject()
+                                    let isOg = decode.partList.filter(z => {
+                                        return z.value == "original"
+                                    })[0]
+                                    if(isOg) {
+                                        s.isOriginal = true;
+                                    }
+                                } catch(e) {}
+                            }
+                            return s;
+                        } else {
+                            return s;
+                        }
+                    })
+                    r.streamingData.adaptiveFormats = checkedFmts
+                }
             }
             catch(error) {console.log(error)}
-            callback(r);
+            fillVideoDetailsFromNext(r, (finalR) => {
+                callback(finalR);
+            });
         }
-        let createFetchAgent = this.createFetchAgent
+        let createFetchAgent = this.createFetchAgent.bind(this);
+        function fillVideoDetailsFromNext(r, cb) {
+            if(r && r.streamingData && r.videoDetails && r.videoDetails.title) {
+                cb(r);
+                return;
+            }
+            if(!r) r = {};
+            function tryVr(afterVr) {
+                if(r.streamingData) {
+                    afterVr();
+                    return;
+                }
+                fetch("https://www.youtube.com/youtubei/v1/player", {
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "User-Agent": "com.google.android.apps.youtube.vr.oculus/1.61.48 (Linux; U; Android 12; Quest 3) gzip"
+                    },
+                    "method": "POST",
+                    "body": JSON.stringify({
+                        "context": {
+                            "client": {
+                                "clientName": "ANDROID_VR",
+                                "clientVersion": "1.61.48",
+                                "deviceMake": "Oculus",
+                                "deviceModel": "Quest 3",
+                                "osName": "Android",
+                                "osVersion": "12",
+                                "hl": "en",
+                                "gl": "US"
+                            }
+                        },
+                        "videoId": id
+                    })
+                }).then(vrRes => vrRes.json().then(vrData => {
+                    if(vrData && vrData.streamingData) {
+                        r.streamingData = vrData.streamingData;
+                        if(!r.videoDetails && vrData.videoDetails) {
+                            r.videoDetails = vrData.videoDetails;
+                        }
+                        if(!r.playerConfig && vrData.playerConfig) {
+                            r.playerConfig = vrData.playerConfig;
+                        }
+                    }
+                    afterVr();
+                }).catch(() => afterVr())).catch(() => afterVr());
+            }
+
+            tryVr(() => {
+                if(r.videoDetails && r.videoDetails.title) {
+                    cb(r);
+                    return;
+                }
+                fetch(hostname + "/youtubei/v1/next?prettyPrint=false", {
+                    "headers": constants.headers,
+                    "referrer": "https://www.youtube.com/",
+                    "body": JSON.stringify({
+                        "context": constants.cached_innertube_context,
+                        "videoId": id
+                    }),
+                    "method": "POST"
+                }).then(nr => nr.json().then(nextData => {
+                    if(nextData) {
+                        if(nextData.microformat && nextData.microformat.playerMicroformatRenderer) {
+                            let mf = nextData.microformat.playerMicroformatRenderer;
+                            if(!r.videoDetails) {
+                                r.videoDetails = {
+                                    "videoId": id,
+                                    "title": (mf.title && mf.title.simpleText) ? mf.title.simpleText : "",
+                                    "lengthSeconds": mf.lengthSeconds || "0",
+                                    "keywords": [],
+                                    "channelId": mf.externalChannelId || "",
+                                    "isOwnerViewing": false,
+                                    "shortDescription": (mf.description && mf.description.simpleText) ? mf.description.simpleText : "",
+                                    "isCrawlable": true,
+                                    "thumbnail": mf.thumbnail || {},
+                                    "allowRatings": true,
+                                    "viewCount": mf.viewCount || "0",
+                                    "author": mf.ownerChannelName || "",
+                                    "isPrivate": false,
+                                    "isUnpluggedCorpus": false,
+                                    "isLiveContent": !!mf.isLiveBroadcast,
+                                    "isLive": !!mf.isLiveBroadcast
+                                };
+                            }
+                        }
+                        if(nextData.contents) {
+                            r.contents = nextData.contents;
+                        }
+                        if(nextData.microformat) {
+                            r.microformat = nextData.microformat;
+                        }
+                    }
+                    cb(r);
+                }).catch(() => cb(r))).catch(() => cb(r));
+            });
+        }
         function requestPlayer() {
             fetch(hostname + "/youtubei/v1/player?prettyPrint=false", {
                 "headers": rHeaders,
@@ -1740,10 +1863,14 @@ module.exports = {
                 }),
                 "method": "POST",
                 "mode": "cors",
-                "agent": this.createFetchAgent()
+                "agent": createFetchAgent()
             }).then(r => {r.json().then(r => {
                 processPlayerResponse(r)
-            })})
+            }).catch(e => {
+                processPlayerResponse({})
+            })}).catch(e => {
+                processPlayerResponse({})
+            })
         }
         requestPlayer();
         setTimeout(() => {
@@ -2486,7 +2613,13 @@ module.exports = {
                     ytConfigData = {"f": 1}
                     callback(ytConfigData)
                 }
-            })})
+            }).catch(e => {
+                ytConfigData = {"f": 1}
+                callback(ytConfigData)
+            })}).catch(e => {
+                ytConfigData = {"f": 1}
+                callback(ytConfigData)
+            })
         }
     },
 

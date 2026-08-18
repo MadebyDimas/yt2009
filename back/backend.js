@@ -1265,19 +1265,7 @@ app.get("/swf/apiplayer.swf", (req, res) => {
 })
 
 app.get("/get_video_info", (req, res) => {
-    const testFlvSabr = false;
-    const useSabr = (
-        req.headers
-     && req.headers.cookie
-     && req.headers.cookie.includes("exp_sabr")
-    ) || (
-        req.headers
-     && req.headers.referer
-     && req.headers.referer.includes("sabr=1")
-    ) || (
-        req.query
-     && req.query.sabr == "1"
-    ) || testFlvSabr;
+    const useSabr = (req.query && req.query.force_sabr == "1");
     if(!yt2009trusted.get_video_info_eligible(req)) {
         res.send([
             "status=fail",

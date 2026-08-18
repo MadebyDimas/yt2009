@@ -265,6 +265,78 @@ module.exports = {
         function markCallbackDone() {
             callbacksMade++
             if(callbacksMade == callbacksRequired) {
+                if(!combinedResponse.videoDetails) {
+                    if(combinedResponse.microformat && combinedResponse.microformat.playerMicroformatRenderer) {
+                        let mf = combinedResponse.microformat.playerMicroformatRenderer;
+                        let desc = "";
+                        if(mf.description && mf.description.simpleText) {
+                            desc = mf.description.simpleText;
+                        }
+                        let title = "";
+                        if(mf.title && mf.title.simpleText) {
+                            title = mf.title.simpleText;
+                        }
+                        combinedResponse.videoDetails = {
+                            "videoId": id,
+                            "title": title,
+                            "lengthSeconds": mf.lengthSeconds || "0",
+                            "keywords": [],
+                            "channelId": mf.externalChannelId || "",
+                            "isOwnerViewing": false,
+                            "shortDescription": desc,
+                            "isCrawlable": true,
+                            "thumbnail": mf.thumbnail || {},
+                            "allowRatings": true,
+                            "viewCount": mf.viewCount || "0",
+                            "author": mf.ownerChannelName || "",
+                            "isPrivate": false,
+                            "isUnpluggedCorpus": false,
+                            "isLiveContent": !!mf.isLiveBroadcast,
+                            "isLive": !!mf.isLiveBroadcast
+                        };
+                    } else if(combinedResponse.contents && combinedResponse.contents.twoColumnWatchNextResults) {
+                        try {
+                            let results = combinedResponse.contents.twoColumnWatchNextResults.results.results.contents;
+                            let primary = results.find(s => s.videoPrimaryInfoRenderer);
+                            let secondary = results.find(s => s.videoSecondaryInfoRenderer);
+                            let title = "";
+                            if(primary && primary.videoPrimaryInfoRenderer && primary.videoPrimaryInfoRenderer.title && primary.videoPrimaryInfoRenderer.title.runs) {
+                                title = primary.videoPrimaryInfoRenderer.title.runs.map(r => r.text).join("");
+                            }
+                            let author = "";
+                            let channelId = "";
+                            if(secondary && secondary.videoSecondaryInfoRenderer && secondary.videoSecondaryInfoRenderer.owner && secondary.videoSecondaryInfoRenderer.owner.videoOwnerRenderer) {
+                                let vor = secondary.videoSecondaryInfoRenderer.owner.videoOwnerRenderer;
+                                if(vor.title && vor.title.runs) {
+                                    author = vor.title.runs.map(r => r.text).join("");
+                                }
+                                if(vor.navigationEndpoint && vor.navigationEndpoint.browseEndpoint) {
+                                    channelId = vor.navigationEndpoint.browseEndpoint.browseId || "";
+                                }
+                            }
+                            if(title) {
+                                combinedResponse.videoDetails = {
+                                    "videoId": id,
+                                    "title": title,
+                                    "lengthSeconds": "0",
+                                    "keywords": [],
+                                    "channelId": channelId,
+                                    "isOwnerViewing": false,
+                                    "shortDescription": "",
+                                    "isCrawlable": true,
+                                    "thumbnail": {},
+                                    "allowRatings": true,
+                                    "viewCount": "0",
+                                    "author": author,
+                                    "isPrivate": false,
+                                    "isUnpluggedCorpus": false,
+                                    "isLiveContent": false,
+                                    "isLive": false
+                                };
+                            }
+                        } catch(e) {}
+                    }
+                }
                 callback(combinedResponse)
                 stopTimer()
             }
@@ -359,7 +431,8 @@ module.exports = {
             if(devTimings) {
                 console.log("/player received", timer)
             }
-            if((r
+            if(!r) r = {};
+            if((!r.videoDetails
             && r.playabilityStatus
             && r.playabilityStatus.status !== "OK"
             && r.playabilityStatus.reason
@@ -545,33 +618,38 @@ module.exports = {
                     data.title = videoData.videoDetails.title
                 }
                 catch(error) {
-                    let defaultError = "This video is unavailable."
-                    let displayError = defaultError
-                    if(videoData.playabilityStatus
-                    && videoData.playabilityStatus.status == "ERROR") {
-                        try {
-                            displayError = videoData.playabilityStatus
-                                           .errorScreen
-                                           .playerErrorMessageRenderer
-                            if(displayError.subreason) {
-                                displayError = displayError.subreason
-                                                           .simpleText;
-                            } else if(videoData.playabilityStatus.reason) {
-                                displayError = videoData.playabilityStatus
-                                                        .reason
-                            } else {
-                                displayError = defaultError
-                            }
-                        }
-                        catch(error) {}
+                    if(videoData && videoData.microformat && videoData.microformat.playerMicroformatRenderer && videoData.microformat.playerMicroformatRenderer.title) {
+                        data.title = videoData.microformat.playerMicroformatRenderer.title.simpleText;
                     }
-                    if(!displayError) {displayError = defaultError;}
-                    data.error = displayError
-                    callback(data)
-                    return;
+                    if(!data.title) {
+                        let defaultError = "This video is unavailable."
+                        let displayError = defaultError
+                        if(videoData.playabilityStatus
+                        && videoData.playabilityStatus.status == "ERROR") {
+                            try {
+                                displayError = videoData.playabilityStatus
+                                               .errorScreen
+                                               .playerErrorMessageRenderer
+                                if(displayError.subreason) {
+                                    displayError = displayError.subreason
+                                                               .simpleText;
+                                } else if(videoData.playabilityStatus.reason) {
+                                    displayError = videoData.playabilityStatus
+                                                            .reason
+                                } else {
+                                    displayError = defaultError
+                                }
+                            }
+                            catch(error) {}
+                        }
+                        if(!displayError) {displayError = defaultError;}
+                        data.error = displayError
+                        callback(data)
+                        return;
+                    }
                 }
 
-                let isLive = videoData.videoDetails.isLive
+                let isLive = videoData.videoDetails ? videoData.videoDetails.isLive : false
                 data.live = isLive
                 // don't cache if live playback as it could end
                 if(data.live) {
@@ -725,9 +803,9 @@ module.exports = {
                         data.upload = new Date().toISOString()
                     }
                 }
-                data.tags = videoData.videoDetails.keywords || [];
+                data.tags = (videoData.videoDetails && videoData.videoDetails.keywords) || [];
                 data.related = []
-                data.length = parseInt(videoData.videoDetails.lengthSeconds)
+                data.length = parseInt((videoData.videoDetails && videoData.videoDetails.lengthSeconds) || (videoData.microformat && videoData.microformat.playerMicroformatRenderer && videoData.microformat.playerMicroformatRenderer.lengthSeconds) || "0")
                 if(videoData.category) {
                     data.category = videoData.category;
                 } else if(videoData.microformat) {
@@ -1285,7 +1363,7 @@ module.exports = {
             useFlash = true;
         }
 
-        // sabr
+        // sabr disabled by default (can be forced with &force_sabr=1)
         let useSabr = false;
         let sabrBaseUrl = ""
         let sabrExtraProperties = {}
@@ -1299,10 +1377,9 @@ module.exports = {
         if(data.isHfrResponse) {
             sabrExtraProperties.useHfr = true;
         }
-        if((flags.includes("exp_sabr")
-        || data.live)
-		&& !(req.query&&req.query.unsabr=="1")
-		&& !(req.query&&req.query.only_itag_18=="1")) {
+        if((req.query && req.query.force_sabr == "1")
+		&& !(req.query && req.query.unsabr == "1")
+		&& !(req.query && req.query.only_itag_18 == "1")) {
             useSabr = true;
             sabrBaseUrl = yt2009sabr.initPlaybackSession(
                 data.id, data.qualities, sabrExtraProperties
@@ -4462,6 +4539,32 @@ https://web.archive.org/web/20091111/http://www.youtube.com/watch?v=${data.id}`
 			"rawResponse": playerResponse
 		}
 		let videoDetails = playerResponse.videoDetails
+		if(!videoDetails && playerResponse.microformat && playerResponse.microformat.playerMicroformatRenderer) {
+			let mf = playerResponse.microformat.playerMicroformatRenderer;
+			let vid = playerResponse.videoId || playerResponse.id || "";
+			if(!vid && mf.thumbnail && mf.thumbnail.thumbnails && mf.thumbnail.thumbnails[0] && mf.thumbnail.thumbnails[0].url.includes("/vi/")) {
+				vid = mf.thumbnail.thumbnails[0].url.split("/vi/")[1].split("/")[0];
+			}
+			videoDetails = {
+				"videoId": vid,
+				"title": (mf.title && mf.title.simpleText) ? mf.title.simpleText : "",
+				"lengthSeconds": mf.lengthSeconds || "0",
+				"keywords": [],
+				"channelId": mf.externalChannelId || "",
+				"isOwnerViewing": false,
+				"shortDescription": (mf.description && mf.description.simpleText) ? mf.description.simpleText : "",
+				"isCrawlable": true,
+				"thumbnail": mf.thumbnail || {},
+				"allowRatings": true,
+				"viewCount": mf.viewCount || "0",
+				"author": mf.ownerChannelName || "",
+				"isPrivate": false,
+				"isUnpluggedCorpus": false,
+				"isLiveContent": !!mf.isLiveBroadcast,
+				"isLive": !!mf.isLiveBroadcast
+			};
+			playerResponse.videoDetails = videoDetails;
+		}
 		if(!videoDetails) return data;
         if(playerResponse.playabilityStatus
         && playerResponse.playabilityStatus.status == "UNPLAYABLE") {

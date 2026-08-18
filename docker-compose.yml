@@ -1,10 +1,22 @@
 services:
+  warp:
+    image: caomingjun/warp:latest
+    container_name: yt2009-warp
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "127.0.0.1:8088:80"
+    environment:
+      - WARP_SLEEP=2
+
   yt2009:
     build: .
     container_name: yt2009-app
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:8088:80"
+    network_mode: "service:warp"
+    depends_on:
+      - warp
     environment:
       - YT2009_PORT=80
       - YT2009_ENV=dev
@@ -15,3 +27,9 @@ services:
     volumes:
       - ./assets:/yt2009/assets
       - ./data:/data
+      - ./back/yt2009html.js:/yt2009/back/yt2009html.js
+      - ./back/yt2009utils.js:/yt2009/back/yt2009utils.js
+      - ./back/yt2009pot.js:/yt2009/back/yt2009pot.js
+      - ./back/yt2009sabr.js:/yt2009/back/yt2009sabr.js
+      - ./back/backend.js:/yt2009/back/backend.js
+      - ./back/yt2009warpSWF.js:/yt2009/back/yt2009warpSWF.js
