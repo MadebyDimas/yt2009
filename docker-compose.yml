@@ -10,6 +10,8 @@ services:
       - "127.0.0.1:8088:80"
     environment:
       - WARP_SLEEP=2
+    volumes:
+      - warp-data:/var/lib/cloudflare-warp
 
   yt2009:
     build: .
@@ -36,3 +38,6 @@ services:
       - ./back/yt2009sabr.js:/yt2009/back/yt2009sabr.js
       - ./back/backend.js:/yt2009/back/backend.js
       - ./back/yt2009warpSWF.js:/yt2009/back/yt2009warpSWF.js
+
+volumes:
+  warp-data:
