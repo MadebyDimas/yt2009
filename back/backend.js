@@ -85,6 +85,24 @@ const hostname = config.alt_hostname
 
 const fs = require("fs");
 const app = express();
+app.get("/assets/:id.mp4", (req, res, next) => {
+    let id = (req.params.id || "").replace(/[^a-zA-Z0-9+\-+_]/g, "").substring(0, 11);
+    if (!id || id.length < 11) {
+        return next();
+    }
+    let filePath = require("path").join(__dirname, "../assets/" + id + ".mp4");
+    if (fs.existsSync(filePath) && fs.statSync(filePath).size > 1000) {
+        return next();
+    }
+    yt2009_utils.saveMp4(id, (vid) => {
+        if (fs.existsSync(filePath)) {
+            res.sendFile(filePath);
+        } else {
+            res.sendStatus(404);
+        }
+    }, true);
+});
+
 app.use(express.static("../assets"))
 app.use(express.static("../assets/site-assets"))
 app.use(express.static("../"))
