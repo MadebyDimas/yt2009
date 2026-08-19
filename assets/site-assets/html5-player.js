@@ -3722,14 +3722,63 @@ function initAsSabr() {
         }
     }, false)
 
+    var _videoReadyPoller = null;
+    function checkAndAutoPlay() {
+        var vId = (window.yt2009_id || (location.search && location.search.split("v=")[1]) || "").split("&")[0].substring(0, 11);
+        if (!vId || _videoReadyPoller) return;
+        _videoReadyPoller = setInterval(function() {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", "/video_status?id=" + encodeURIComponent(vId), true);
+            xhr.onload = function() {
+                try {
+                    var res = JSON.parse(xhr.responseText);
+                    if (res.ready) {
+                        clearInterval(_videoReadyPoller);
+                        _videoReadyPoller = null;
+                        try { hideLoadingSprite(); } catch(e) {}
+                        if (video) {
+                            var currTime = video.currentTime || 0;
+                            video.load();
+                            if (currTime > 0) {
+                                try { video.currentTime = currTime; } catch(e) {}
+                            }
+                            video.play().catch(function(){});
+                        }
+                    }
+                } catch(e) {}
+            };
+            xhr.onerror = function() {};
+            xhr.send();
+        }, 2500);
+    }
+
     video.addEventListener("waiting", function() {
         showLoadingSprite()
+        checkAndAutoPlay()
 
         setTimeout(function() {
             if(Math.floor(video.currentTime) == Math.floor(video.duration)) {
                 video_pause()
             }
         }, 1000)
+    })
+
+    video.addEventListener("error", function() {
+        showLoadingSprite()
+        checkAndAutoPlay()
+    })
+
+    video.addEventListener("stalled", function() {
+        showLoadingSprite()
+        checkAndAutoPlay()
+    })
+
+    video.addEventListener("playing", function() {
+        if (_videoReadyPoller) {
+            clearInterval(_videoReadyPoller);
+            _videoReadyPoller = null;
+        }
+        try { hideLoadingSprite(); } catch(e) {}
     })
 }
 

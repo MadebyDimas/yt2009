@@ -1975,6 +1975,25 @@ app.get("/channel_fh264_getvideo", (req, res) => {
     
 })
 
+app.get("/video_status", (req, res) => {
+    let id = (req.query.id || req.query.v || "").replace(/[^a-zA-Z0-9+\-+_]/g, "").substring(0, 11);
+    if (!id) {
+        return res.json({ready: false});
+    }
+    let assetPath = "../assets/" + id + ".mp4";
+    let ready = false;
+    try {
+        if (fs.existsSync(assetPath) && fs.statSync(assetPath).size > 10000) {
+            ready = true;
+        }
+    } catch(e) {}
+    let status = yt2009_exports.getStatus(id);
+    res.json({
+        ready: ready || status === 2,
+        status: status || (ready ? 2 : 0)
+    });
+});
+
 function ffmpegEncodeBaseline(req, res) {
     let vId = ""
     if(req.query.v) {
