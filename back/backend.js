@@ -85,6 +85,23 @@ const hostname = config.alt_hostname
 
 const fs = require("fs");
 const app = express();
+
+// automatic 1-time client-side cache and cookies reset
+app.use((req, res, next) => {
+    if(req.headers.cookie && req.headers.cookie.includes("yt2009_reset_done=1")) {
+        return next();
+    }
+    let oldSend = res.send;
+    res.send = function(data) {
+        if(typeof data === "string" && (data.includes("<head>") || data.includes("<head "))) {
+            try { res.setHeader("Clear-Site-Data", '"cache"'); } catch(e) {}
+            data = data.replace(/<head>/i, `<head><script>(function(){if(!localStorage.getItem("yt2009_auto_reset_v1")){localStorage.setItem("yt2009_auto_reset_v1","1");var c=document.cookie.split(";");for(var i=0;i<c.length;i++){var ck=c[i].trim(),eq=ck.indexOf("="),n=eq>-1?ck.substr(0,eq):ck;document.cookie=n+"=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;";document.cookie=n+"=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain="+location.hostname;}if(window.caches){caches.keys().then(function(ns){ns.forEach(function(n){caches.delete(n)})})}document.cookie="yt2009_reset_done=1;path=/;max-age=315360000";}})();</script>`);
+        }
+        return oldSend.apply(this, arguments);
+    };
+    next();
+});
+
 app.use(express.static("../assets"))
 app.use(express.static("../assets/site-assets"))
 app.use(express.static("../"))
