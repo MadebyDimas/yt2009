@@ -2,6 +2,7 @@ services:
   warp:
     image: caomingjun/warp:latest
     container_name: yt2009-warp
+    user: "root"
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
