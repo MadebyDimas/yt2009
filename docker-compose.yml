@@ -10,6 +10,7 @@ services:
       - "127.0.0.1:8088:80"
     environment:
       - WARP_SLEEP=2
+      - BETA_FIX_HOST_CONNECTIVITY=1
     volumes:
       - warp-data:/var/lib/cloudflare-warp
       - ./warp-entrypoint.sh:/warp-entrypoint.sh
