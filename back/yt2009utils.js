@@ -1756,7 +1756,11 @@ module.exports = {
             }
             if(!r) r = {};
             function tryVr(afterVr) {
-                if(r.streamingData) {
+                let hasValidFormats = r.streamingData && (
+                    (r.streamingData.formats && r.streamingData.formats.some(f => f.url)) ||
+                    (r.streamingData.adaptiveFormats && r.streamingData.adaptiveFormats.some(f => f.url))
+                );
+                if(hasValidFormats && (!r.playabilityStatus || r.playabilityStatus.status == "OK")) {
                     afterVr();
                     return;
                 }
@@ -1782,8 +1786,9 @@ module.exports = {
                         "videoId": id
                     })
                 }).then(vrRes => vrRes.json().then(vrData => {
-                    if(vrData && vrData.streamingData) {
+                    if(vrData && vrData.streamingData && (vrData.streamingData.adaptiveFormats || vrData.streamingData.formats)) {
                         r.streamingData = vrData.streamingData;
+                        delete r.playabilityStatus;
                         if(!r.videoDetails && vrData.videoDetails) {
                             r.videoDetails = vrData.videoDetails;
                         }
